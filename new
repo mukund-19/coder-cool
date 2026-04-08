@@ -1,0 +1,115 @@
+param(
+    [switch]$SkipDatabase,
+    [switch]$SkipTestCaseService
+)
+
+$ErrorActionPreference = 'Stop'
+
+function Assert-Path {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    if (-not (Test-Path -Path $Path)) {
+        throw "$Label not found: $Path"
+    }
+}
+
+function Resolve-PythonExe {
+    param([Parameter(Mandatory = $true)][string]$RepoRoot)
+
+    $venvPython = Join-Path $RepoRoot ".venv\Scripts\python.exe"
+    if (Test-Path $venvPython) {
+        return $venvPython
+    }
+
+    $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
+    if ($pythonCmd) {
+        Write-Warning "Virtual env python not found at .venv. Falling back to system python."
+        return $pythonCmd.Source
+    }
+
+    throw "Python executable not found. Install Python or create .venv first."
+}
+
+function Start-ServiceWindow {
+    param(
+        [Parameter(Mandatory = $true)][string]$Title,
+        [Parameter(Mandatory = $true)][string]$WorkingDirectory,
+        [Parameter(Mandatory = $true)][string]$Command
+    )
+
+    $startupScript = @"
+Set-Location '$WorkingDirectory'
+`$host.UI.RawUI.WindowTitle = '$Title'
+$Command
+"@
+
+    Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $startupScript | Out-Null
+    Write-Host "[startup] $Title started." -ForegroundColor Green
+}
+
+try {
+    $repoRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+
+    $backendPath = Join-Path $repoRoot "apps\backend"
+    $frontendPath = Join-Path $repoRoot "apps\frontend"
+    $pythonServicePath = Join-Path $repoRoot "python_service"
+    $testCaseServicePath = Join-Path $repoRoot "python_testCaseGeneration_Service"
+
+    Assert-Path -Path $backendPath -Label "Backend folder"
+    Assert-Path -Path $frontendPath -Label "Frontend folder"
+    Assert-Path -Path $pythonServicePath -Label "Python service folder"
+
+    if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+        throw "npm not found in PATH. Install Node.js first."
+    }
+
+    $pythonExe = Resolve-PythonExe -RepoRoot $repoRoot
+
+    if (-not $SkipDatabase) {
+        if (Get-Command docker -ErrorAction SilentlyContinue) {
+            Write-Host "[startup] Ensuring Postgres is running (docker compose up -d)..." -ForegroundColor Cyan
+            Push-Location $backendPath
+            try {
+                docker compose up -d | Out-Host
+            }
+            finally {
+                Pop-Location
+            }
+        }
+        else {
+            Write-Warning "Docker is not available. Skipping DB startup."
+        }
+    }
+
+    Start-ServiceWindow -Title "Backend - NestJS" -WorkingDirectory $backendPath -Command "npm run start:dev"
+    Start-ServiceWindow -Title "Frontend - Next.js" -WorkingDirectory $frontendPath -Command "npm run dev"
+
+    $pythonServiceCommand = "& '$pythonExe' main.py"
+    Start-ServiceWindow -Title "Python Service - Form Generator" -WorkingDirectory $pythonServicePath -Command $pythonServiceCommand
+
+    if (-not $SkipTestCaseService -and (Test-Path $testCaseServicePath)) {
+        $testCaseCommand = "& '$pythonExe' -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+        Start-ServiceWindow -Title "Python Service - Test Cases" -WorkingDirectory $testCaseServicePath -Command $testCaseCommand
+    }
+
+    Write-Host ""
+    Write-Host "[startup] All requested services started." -ForegroundColor Green
+    Write-Host "Frontend: http://localhost:3000"
+    Write-Host "Backend:  http://localhost:3001/auth/check"
+    Write-Host "Python:   http://localhost:8001/health"
+    if (-not $SkipTestCaseService -and (Test-Path $testCaseServicePath)) {
+        Write-Host "TestCase: http://localhost:8000/docs"
+    }
+    Write-Host ""
+    Write-Host "Usage:" -ForegroundColor Cyan
+    Write-Host "  .\startup.ps1"
+    Write-Host "  .\startup.ps1 -SkipDatabase"
+    Write-Host "  .\startup.ps1 -SkipTestCaseService"
+}
+catch {
+    Write-Error "Startup failed: $($_.Exception.Message)"
+    exit 1
+}
