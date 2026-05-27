@@ -1,0 +1,16 @@
+curl 'https://suda.digitalgovernance.digital/user/_logout?tenantId=cg&_=1779699897295' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: en-US,en;q=0.9' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json;charset=UTF-8' \
+  -b 'SESSIONID=4a3221ed-e31a-4617-a4a5-5b4cba7841ee' \
+  -H 'Origin: https://suda.digitalgovernance.digital' \
+  -H 'Referer: https://suda.digitalgovernance.digital/suda-ui/citizen/error' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0' \
+  -H 'sec-ch-ua: "Chromium";v="148", "Microsoft Edge";v="148", "Not/A)Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "Windows"' \
+  --data-raw '{"access_token":"f45d505f-a1f9-4d1e-aa18-ed1c04c2ba5e","RequestInfo":{"apiId":"Rainmaker","authToken":"f45d505f-a1f9-4d1e-aa18-ed1c04c2ba5e","msgId":"1779699897295|en_IN","plainAccessRequest":{}}}'
